@@ -15,6 +15,8 @@ This hands-on session equips you with the practical knowledge needed to build sc
 
 ## Steps
 
+* Please ensure you update the paths for the jobs and JAR file to match your machine's configuration before running it.
+
 ### Step 1: Spin Up the Stack and Install PySpark
 
 Start the required services and set up the Python environment.
