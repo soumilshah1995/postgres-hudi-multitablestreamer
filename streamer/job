@@ -1,0 +1,137 @@
+
+
+
+
+export JAVA_HOME=/opt/homebrew/opt/openjdk@11
+------------------------------------
+Hudi Multi table Streamer
+------------------------------------
+spark-submit \
+    --class  org.apache.hudi.utilities.deltastreamer.HoodieMultiTableDeltaStreamer \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --properties-file /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/spark-properties/spark-config.properties \
+    --master 'local[*]' \
+    --executor-memory 1g \
+    /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/jar/hudi-utilities-slim-bundle_2.12-0.14.0.jar \
+    --op UPSERT \
+    --enable-hive-sync \
+    --table-type COPY_ON_WRITE \
+    --source-ordering-field _event_origin_ts_ms \
+    --source-class org.apache.hudi.utilities.sources.debezium.PostgresDebeziumSource \
+    --payload-class org.apache.hudi.common.model.debezium.PostgresDebeziumAvroPayload \
+    --base-path-prefix s3a://warehouse/hudi \
+    --target-table customers,orders \
+    --config-folder /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/configfolder/ \
+    --props /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/configfolder/source.properties
+
+UPDATE items
+
+-- DELETE FROM public.orders WHERE order_id = 'd304f7cb-6fa8-45b6-a6cb-3d3eb1b1f66f'
+
+------------------------------------
+Query with Trino
+------------------------------------
+cd /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/trino/notebooks
+jupyter notebook
+
+
+----------------------------------------------------------------
+Hudi COLUMN STATS INDEX on CUSTOMER TABLE
+------------------------------------------------------------------------------
+spark-submit \
+    --class org.apache.hudi.utilities.HoodieIndexer \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --properties-file /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/spark-properties/spark-config.properties \
+    --master 'local[*]' \
+    --executor-memory 1g \
+    /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/jar/hudi-utilities-slim-bundle_2.12-0.14.0.jar \
+    --mode scheduleAndExecute \
+    --base-path 's3a://warehouse/hudi/default/customers' \
+    --table-name customers \
+    --index-types COLUMN_STATS \
+    --hoodie-conf "hoodie.metadata.enable=true" \
+    --hoodie-conf "hoodie.metadata.index.async=true" \
+    --hoodie-conf "hoodie.metadata.index.column.stats.enable=true" \
+    --hoodie-conf "hoodie.write.concurrency.mode=optimistic_concurrency_control" \
+    --hoodie-conf "hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider" \
+    --parallelism 2 \
+    --spark-memory 2g
+
+
+-------------------------------------------------------
+RECORD LEVEL INDEX  for CUSTOMERS
+--------------------------------------------------------------------------
+spark-submit \
+    --class org.apache.hudi.utilities.HoodieIndexer \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --properties-file /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/spark-properties/spark-config.properties \
+    --master 'local[*]' \
+    --executor-memory 1g \
+    /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/jar/hudi-utilities-slim-bundle_2.12-0.14.0.jar \
+     --mode scheduleAndExecute \
+    --base-path 's3a://warehouse/hudi/default/customers' \
+    --table-name customers \
+    --index-types RECORD_INDEX \
+    --hoodie-conf "hoodie.metadata.enable=true" \
+    --hoodie-conf "hoodie.metadata.record.index.enable=true" \
+    --hoodie-conf "hoodie.metadata.index.async=true" \
+    --hoodie-conf "hoodie.write.concurrency.mode=optimistic_concurrency_control" \
+    --hoodie-conf "hoodie.write.lock.provider=org.apache.hudi.client.transaction.lock.InProcessLockProvider" \
+    --parallelism 2 \
+    --spark-memory 2g
+
+
+
+------------------------------------
+Hudi Exporter EXPORTS
+------------------------------------
+spark-submit \
+    --class org.apache.hudi.utilities.HoodieSnapshotExporter \
+    --properties-file /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/spark-properties/spark-config.properties \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:1.0.0-beta2,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --master 'local[*]' \
+    --executor-memory 1g \
+    /Users/soumilshah/IdeaProjects/SparkProject/apache-hudi-delta-streamer-labs/E1/jar/hudi-utilities-slim-bundle_2.12-1.0.0-beta2.jar \
+    --source-base-path 's3a://warehouse/hudi/default/orders' \
+    --target-output-path 's3a://warehouse/exports/parquet/' \
+    --transformer-class "org.apache.hudi.utilities.transform.SqlQueryBasedTransformer" \
+    --transformer-sql "SELECT * FROM <SRC> WHERE priority='HIGH'" \
+    --output-format 'parquet'
+
+
+------------------------------------
+cleaning
+------------------------------------
+spark-submit \
+    --class org.apache.hudi.utilities.HoodieCleaner \
+    --properties-file /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/streamer/spark-properties/spark-config.properties \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --master 'local[*]' \
+    --executor-memory 1g \
+    /Users/soumilshah/IdeaProjects/lakehouse-streamer/universal-datalakehouse-postgres-ingestion-deltastreamer/jar/hudi-utilities-slim-bundle_2.12-0.14.0.jar \
+    --target-base-path 's3a://warehouse/hudi/default/orders' \
+    --hoodie-conf hoodie.cleaner.policy=KEEP_LATEST_FILE_VERSIONS \
+    --hoodie-conf hoodie.cleaner.fileversions.retained=1 \
+    --hoodie-conf hoodie.cleaner.parallelism=20
+
+
+------------------------------------
+Query with Spark SQL
+------------------------------------
+
+spark-sql \
+    --packages 'org.apache.hudi:hudi-spark3.4-bundle_2.12:0.14.0,org.apache.hadoop:hadoop-aws:3.3.2' \
+    --conf 'spark.serializer=org.apache.spark.serializer.KryoSerializer' \
+    --conf 'spark.sql.extensions=org.apache.spark.sql.hudi.HoodieSparkSessionExtension' \
+    --conf 'spark.sql.catalog.spark_catalog=org.apache.spark.sql.hudi.catalog.HoodieCatalog' \
+    --conf 'spark.kryo.registrator=org.apache.spark.HoodieSparkKryoRegistrar' \
+    --conf "spark.sql.catalogImplementation=hive" \
+    --conf "spark.hadoop.hive.metastore.uris=thrift://localhost:9083" \
+    --conf "spark.hadoop.fs.s3a.access.key=admin" \
+    --conf "spark.hadoop.fs.s3a.secret.key=password" \
+    --conf "spark.hadoop.fs.s3a.endpoint=http://127.0.0.1:9000" \
+    --conf "spark.hadoop.fs.s3a.path.style.access=true" \
+    --conf "fs.s3a.signing-algorithm=S3SignerType"
+
+
+

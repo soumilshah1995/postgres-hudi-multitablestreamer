@@ -1,0 +1,3 @@
+ipython-sql
+trino
+pyspark==3.4.0
